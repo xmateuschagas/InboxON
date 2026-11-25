@@ -18,7 +18,7 @@ from .classifier import classificar, criar_motor
 from .queue import ConflitoDeEncaminhamento, FilaSQLite
 from .schemas import CampoInvalido, Comprovante, Encaminhamento, EntradaInvalida, Fila, Mensagem, Registro, Resultado
 
-log = logging.getLogger("uvicorn.error.kodie")
+log = logging.getLogger("uvicorn.error.inboxon")
 ERRO_422 = {422: {"description": "Entrada inválida", "model": EntradaInvalida}}
 
 
@@ -67,7 +67,7 @@ def criar_app(config: Config | None = None, *, transporte: httpx.AsyncBaseTransp
             api.state.motor = criar_motor(cliente, cfg.ollama_model)
             yield
 
-    api = FastAPI(title="KODIE | Classificação de Mensagens", version="1.1.0", lifespan=lifespan)
+    api = FastAPI(title="InboxON | Classificação e roteamento de mensagens", version="1.1.0", lifespan=lifespan)
 
     @api.exception_handler(RequestValidationError)
     async def entrada_invalida(_: Request, erro: RequestValidationError) -> JSONResponse:
