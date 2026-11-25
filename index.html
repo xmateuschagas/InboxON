@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Demonstração interativa de classificação e roteamento de mensagens do InboxON.">
+  <title>InboxON · Triagem de mensagens</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      color: #172034;
+      background: #f1f4f7;
+      --accent: #a93e12;
+      --muted: #566377;
+      --line: #dbe1e9;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+    button, textarea { font: inherit; }
+    button, summary { cursor: pointer; }
+    a { color: inherit; text-underline-offset: .22em; }
+    :focus-visible { outline: 3px solid #b94818; outline-offset: 4px; }
+    .shell { width: min(1080px, calc(100% - 40px)); margin-inline: auto; }
+    header { border-bottom: 1px solid var(--line); background: #fff; }
+    header .shell {
+      min-height: 72px; display: flex; align-items: center;
+      justify-content: space-between; gap: 16px;
+    }
+    .brand { font-size: 1.55rem; font-weight: 800; letter-spacing: -.07em; }
+    .brand span { color: var(--accent); }
+    .repo { font-size: .875rem; color: var(--muted); }
+    main { padding-block: clamp(34px, 7vw, 86px) 44px; }
+    .tag {
+      display: inline-block; margin: 0 0 12px; padding: 6px 10px;
+      background: #fbe8df; color: #94380f; border-radius: 6px;
+      font-size: .875rem; font-weight: 650;
+    }
+    body[data-mode="live"] .tag { background: #dcefe6; color: #125638; }
+    h1 { font-size: clamp(2.4rem, 6vw, 4.25rem); letter-spacing: -.065em; margin: 0; line-height: 1.01; }
+    .intro { max-width: 58ch; margin: 14px 0 34px; color: var(--muted); line-height: 1.55; }
+    .grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; }
+    .card { padding: clamp(20px, 4vw, 32px); border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+    .result { background: #192338; color: #f7f9fd; border-color: #192338; overflow-wrap: anywhere; }
+    .card h2, label { display: block; font-size: 1.08rem; font-weight: 700; margin: 0 0 12px; }
+    textarea {
+      width: 100%; min-height: 132px; padding: 13px 14px; resize: vertical;
+      border: 1px solid #aeb9c8; border-radius: 8px; color: inherit; background: #fbfcfe;
+      line-height: 1.55;
+    }
+    .examples { display: flex; gap: 7px; flex-wrap: wrap; margin: 12px 0 20px; }
+    .example {
+      border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px;
+      background: #fff; color: #455268; font-size: .875rem;
+    }
+    .example:hover { background: #f0f3f7; }
+    .submit {
+      min-height: 44px; padding: 10px 16px; border: 0; border-radius: 8px;
+      background: var(--accent); color: #fff; font-weight: 700;
+    }
+    .submit:hover { background: #87300e; }
+    .submit:disabled { opacity: .7; cursor: wait; }
+    #status { color: var(--muted); font-size: .875rem; margin: 12px 0 0; min-height: 1.35em; }
+    #status[data-error] { color: #a12d14; }
+    .result p, .result dt { color: #c2ccdb; }
+    .result p { margin: 0; line-height: 1.55; }
+    dl { margin: 0; }
+    dl div { border-top: 1px solid #39465b; padding: 10px 0; }
+    dt { font-size: .875rem; }
+    dd { margin: 3px 0 0; font-size: 1rem; }
+    #queue { color: #ffbb9e; font-weight: 750; font-size: 1.35rem; }
+    #receipt { font-family: ui-monospace, monospace; font-size: .82rem; }
+    details { margin-top: 20px; padding: 16px 18px; border: 1px solid var(--line); background: #fff; border-radius: 10px; }
+    summary { font-weight: 650; }
+    details p { color: var(--muted); line-height: 1.5; }
+    pre { background: #f1f4f7; padding: 12px; border-radius: 7px; overflow: auto; }
+    [hidden] { display: none !important; }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="shell">
+      <div class="brand">Inbox<span>ON</span></div>
+      <a class="repo" href="https://github.com/xmateuschagas/InboxON">Repositório no GitHub</a>
+    </div>
+  </header>
+  <main class="shell">
+    <p class="tag" id="mode">Modo demonstração</p>
+    <h1>Triagem de mensagens</h1>
+    <p class="intro" id="intro">Experimente a classificação de um pedido e veja a fila de destino. A simulação funciona no navegador.</p>
+    <div class="grid">
+      <form id="form" class="card">
+        <label for="message">Mensagem de atendimento</label>
+        <textarea id="message" maxlength="3000" rows="5" required placeholder="Ex.: Podem emitir a segunda via do boleto?">Podem emitir a segunda via do boleto?</textarea>
+        <div class="examples" aria-label="Mensagens de exemplo">
+          <button class="example" type="button" data-sample="Podem emitir a segunda via do boleto?">Segunda via</button>
+          <button class="example" type="button" data-sample="O sistema caiu e a loja não consegue vender.">Sistema fora do ar</button>
+          <button class="example" type="button" data-sample="Qual é o preço do plano?">Preço do plano</button>
+        </div>
+        <button class="submit" id="submit" type="submit">Classificar mensagem</button>
+        <p id="status" role="status"></p>
+      </form>
+      <section class="card result" aria-labelledby="result-title" aria-live="polite">
+        <h2 id="result-title">Resultado</h2>
+        <p id="empty">Envie uma mensagem para ver o encaminhamento.</p>
+        <dl id="data" hidden>
+          <div><dt>Fila</dt><dd id="queue"></dd></div>
+          <div><dt>Categoria e prioridade</dt><dd id="classification"></dd></div>
+          <div><dt>Resumo</dt><dd id="summary"></dd></div>
+          <div><dt>Comprovante</dt><dd id="receipt"></dd></div>
+        </dl>
+      </section>
+    </div>
+    <details id="connection">
+      <summary>Testar com a API da sua VPS</summary>
+      <p>Baixe <a href="index.html" download>index.html</a> e <a href="servidor.py" download>servidor.py</a> na mesma pasta. Use o seu usuário e endereço SSH no comando em um PowerShell e deixe essa janela aberta.</p>
+      <pre><code>ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:15678:127.0.0.1:5678 usuario@servidor</code></pre>
+      <p>Em outro PowerShell, na pasta dos arquivos, rode o comando abaixo com Python 3 instalado. Então abra <a href="http://127.0.0.1:8787/">127.0.0.1:8787</a> no navegador.</p>
+      <pre><code>py -3 servidor.py</code></pre>
+    </details>
+  </main>
+  <script>
+    "use strict";
+    const $ = (id) => document.getElementById(id);
+    const live = location.origin === "http://127.0.0.1:8787";
+    const labels = {
+      atendimento: "Atendimento", comercial: "Comercial", financeiro: "Financeiro",
+      operacoes: "Operações", suporte: "Suporte", prioritario: "Prioritário", triagem: "Triagem",
+      duvida: "Dúvida", solicitacao: "Solicitação", reclamacao: "Reclamação", outro: "Outro",
+      baixa: "Baixa", media: "Média", alta: "Alta"
+    };
+    let demoReceipt = 0;
+    if (live) {
+      document.body.dataset.mode = "live";
+      $("mode").textContent = "API da VPS";
+      $("intro").textContent = "Envie uma mensagem fictícia e confira o registro criado pela API. A resposta pode levar alguns segundos.";
+      $("connection").hidden = true;
+    }
+    for (const button of document.querySelectorAll("[data-sample]")) {
+      button.addEventListener("click", () => {
+        $("message").value = button.dataset.sample;
+        $("message").focus();
+      });
+    }
+
+    function simulate(message) {
+      const text = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const topics = [
+        ["financeiro", /\b(boletos?|cobranca|pagamentos?|fatura|estorno)\b/],
+        ["operacoes", /\b(entrega|pedido|troca|rastreio|encomenda)\b/],
+        ["suporte", /\b(sistema|acesso|senha|login|erro)\b/],
+        ["comercial", /\b(planos?|precos?|valores?|orcamento)\b/]
+      ];
+      const sector = topics.find(([, pattern]) => pattern.test(text))?.[0] ?? "atendimento";
+      let categoria = "outro";
+      let prioridade = "baixa";
+      let resumo = "Mensagem encaminhada para avaliação manual.";
+      if (/\b(nao funciona|caiu|nao chegou|indevida|passou do prazo|erro|bloquead[oa])\b/.test(text)) {
+        categoria = "reclamacao";
+        prioridade = /\b(nao consigo vender|nao consegue vender|operacao parada|fraude|vazamento)\b/.test(text) ? "alta" : "media";
+        resumo = "Relato de um problema no atendimento ou no serviço.";
+      } else if (/\b(emitir|cancelar|solicito|alterar|trocar|segunda via|enviar|reenviar)\b/.test(text)) {
+        categoria = "solicitacao";
+        prioridade = "media";
+        resumo = "Pedido de ação à equipe responsável.";
+      } else if (text.includes("?") || /\b(como|qual|quanto|gostaria de saber)\b/.test(text)) {
+        categoria = "duvida";
+        resumo = "Pedido de informação sobre o assunto indicado.";
+      }
+      const fila = prioridade === "alta" ? "prioritario" : categoria === "outro" ? "triagem" : sector;
+      return { fila, classificacao: { categoria, prioridade, resumo }, id: "DEMO-" + ++demoReceipt };
+    }
+
+    async function send(message) {
+      const response = await fetch("/classificar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mensagem: message }),
+        signal: AbortSignal.timeout(65000)
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.erro || "A API retornou HTTP " + response.status + ".");
+      if (!data.classificacao || !data.fila || !data.id) throw new Error("Resposta sem comprovante de encaminhamento.");
+      return data;
+    }
+
+    $("form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const message = $("message").value.trim();
+      const status = $("status");
+      delete status.dataset.error;
+      $("data").hidden = true;
+      $("empty").hidden = false;
+      if (!message) {
+        status.dataset.error = "";
+        status.textContent = "Digite uma mensagem antes de classificar.";
+        $("message").focus();
+        return;
+      }
+      $("submit").disabled = true;
+      status.textContent = live ? "Consultando a API da VPS…" : "";
+      try {
+        const { fila, classificacao, id } = live ? await send(message) : simulate(message);
+        $("queue").textContent = labels[fila] ?? fila;
+        $("classification").textContent = [
+          labels[classificacao.categoria] ?? classificacao.categoria,
+          labels[classificacao.prioridade] ?? classificacao.prioridade
+        ].join(" · ");
+        $("summary").textContent = classificacao.resumo;
+        $("receipt").textContent = id;
+        $("empty").hidden = true;
+        $("data").hidden = false;
+        status.textContent = live ? "Encaminhamento registrado na VPS." : "Resultado simulado neste navegador.";
+      } catch (error) {
+        status.dataset.error = "";
+        status.textContent = error.name === "TimeoutError" ? "A API demorou para responder. Verifique a conexão." : error.message;
+      } finally {
+        $("submit").disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
