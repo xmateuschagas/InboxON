@@ -8,7 +8,7 @@ import httpx
 
 from .schemas import Categoria, Classificacao, Origem, Prioridade, Setor, schema_classificacao
 
-log = logging.getLogger("uvicorn.error.kodie")
+log = logging.getLogger("uvicorn.error.inboxon")
 
 Motor = Callable[[str], Awaitable[Classificacao]]
 INSTRUCOES = """Classifique uma mensagem de cliente para triagem de uma pequena empresa.

@@ -1,16 +1,10 @@
-# KODIE | Classificação e roteamento de mensagens
+# InboxON
 
-Uma API recebe mensagens de atendimento, classifica a intenção, sugere prioridade e setor, e entrega um resultado estruturado ao n8n. O workflow aplica as regras de encaminhamento, registra a mensagem em uma fila persistente e devolve um comprovante de gravação.
+Projeto pessoal de **classificação e roteamento de mensagens de atendimento**. O InboxON recebe mensagens por webhook, identifica a intenção, atribui uma prioridade e encaminha cada mensagem à fila responsável. Cada gravação gera um comprovante com um identificador que permite consultar o registro.
 
-## 1. Apresentação da ideia
+Um pedido de segunda via, por exemplo, vai para o financeiro. Uma falha que interrompe vendas vai para a fila prioritária. Quando o motor de classificação está indisponível ou a resposta é inválida, a mensagem segue para triagem manual.
 
-Uma pequena empresa recebe dúvidas, solicitações e reclamações no mesmo canal. A triagem manual atrasa o encaminhamento e dificulta a identificação de ocorrências prioritárias. O projeto organiza essa entrada e permite localizar cada mensagem pelo identificador do comprovante.
-
-## 2. Problema escolhido
-
-**Caso 4.1 — Classificação de mensagens.** O objetivo é transformar uma mensagem livre em uma decisão verificável. Um pedido de segunda via deve chegar à fila financeira. Uma falha que interrompe vendas deve ir para atendimento prioritário. Quando a classificação falha, a mensagem original segue para triagem.
-
-## 3. Solução proposta
+## Arquitetura
 
 ```mermaid
 flowchart LR
@@ -22,7 +16,7 @@ flowchart LR
 
 A FastAPI valida a entrada e pede ao Ollama uma saída conforme JSON Schema. O Pydantic valida o retorno antes de aceitá-lo. O n8n decide a fila, solicita a gravação à API e devolve o recibo ao cliente. O Ollama roda dentro da rede do Compose, na mesma máquina, e o modo local dispensa chave de API externa.
 
-## 4. Tecnologias utilizadas
+## Tecnologias
 
 | Camada | Stack |
 | --- | --- |
@@ -32,7 +26,7 @@ A FastAPI valida a entrada e pede ao Ollama uma saída conforme JSON Schema. O P
 | Persistência | SQLite em modo WAL, com chave única por encaminhamento |
 | Infraestrutura e testes | Docker Compose, `unittest` e teste de integração HTTP |
 
-## 5. Funcionamento do sistema
+## Contrato HTTP e regras de roteamento
 
 | Endpoint | Comportamento |
 | --- | --- |
@@ -55,7 +49,7 @@ A mensagem deve ter de 1 a 3.000 caracteres após a remoção de espaços nas ex
 
 A proteção contra duplicidade vale para a gravação com o mesmo ID. Cada nova chamada ao webhook gera seu próprio ID. No Compose, a API e o editor do n8n escutam somente no loopback do host. O Ollama não publica porta no host. Use mensagens fictícias para demonstração, pois a fila e o histórico do n8n armazenam o texto original.
 
-### Evidências e resultados na VPS
+## Validação na VPS
 
 Validação de 25/11/2026 em Docker Compose, com o workflow publicado e a API em modo `ollama`.
 
@@ -72,7 +66,7 @@ A bateria levou **71,27 s**. O `docker compose stats` mediu **aproximadamente 3 
 
 A [evidência da execução nº 10](docs/prints/execucao-10.json) reúne o pedido de segunda via, a classificação `solicitacao`, a prioridade `media`, a fila `financeiro` e o mesmo ID na gravação e na consulta. O [índice de capturas](docs/prints/README.md) organiza o canvas, a execução bem-sucedida, as configurações dos seis nós e as saídas por etapa.
 
-## 6. Como executar
+## Como executar
 
 ### Docker Compose
 
@@ -120,4 +114,4 @@ python3 -m venv .venv
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-No Windows, o executável equivalente é `.\.venv\Scripts\python.exe`. Consulte o [guia operacional](docs/entrega.md) para acesso à VPS, captura de evidências, sincronização e publicação.
+No Windows, o executável equivalente é `.\.venv\Scripts\python.exe`. Consulte o [guia operacional](docs/entrega.md) para acesso à VPS, atualização e captura de evidências.

@@ -1,7 +1,7 @@
 {
-  "id": "KodieMensagens01",
+  "id": "InboxONMensagens01",
   "versionId": "d681fa28-ca91-4b87-84c5-3df7b8422068",
-  "name": "KODIE | Classificação de mensagens",
+  "name": "InboxON | Classificação de mensagens",
   "active": false,
   "nodes": [
     {

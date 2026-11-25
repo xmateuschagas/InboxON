@@ -1,18 +1,16 @@
-# Guia de entrega e operação
+# Guia operacional do InboxON
 
 ## Acesso ao n8n na VPS
 
-No PowerShell do Windows, execute o túnel com o alias da VPS e deixe a janela aberta. Use uma janela separada para os outros comandos.
+Abra um túnel SSH e mantenha o terminal aberto. Substitua `usuario@host` pelos dados de acesso da VPS.
 
-```powershell
-ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:15678:127.0.0.1:5678 servidor168
+```bash
+ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:15678:127.0.0.1:5678 usuario@host
 ```
 
-Abra `http://localhost:15678`. Se a sessão tiver expirado, entre com a conta local do n8n. Digite a senha diretamente na página de login. No workflow **KODIE | Classificação de mensagens**, abra **Execuções** e selecione a **nº 10**. Confira o status **Success** e a mensagem sobre a segunda via do boleto. A execução começou às **14:10:00** no horário de Brasília em 25/11/2026.
+Acesse `http://localhost:15678` e entre na conta local do n8n. No editor, localize o fluxo cujo webhook usa o caminho `classificar-mensagem` e abra a aba **Execuções**. A execução **nº 10**, quando ainda disponível, mostra o processamento do pedido de segunda via em 25/11/2026, às 14:10 no horário de Brasília.
 
-Use o [índice de capturas](prints/README.md) para salvar os PNGs na pasta `docs/prints/` do checkout local. A [evidência JSON](prints/execucao-10.json) foi extraída do histórico de execução e conferida com o registro persistido na fila financeira. Ela permite conferir o caso mesmo se a política de retenção do n8n já tiver removido a entrada do editor.
-
-Se a execução nº 10 tiver expirado, gere uma nova execução com a mesma mensagem. Na VPS, rode:
+A [evidência em JSON](prints/execucao-10.json) documenta as etapas dessa execução e o registro consultado na fila financeira. Para registrar uma nova execução, rode este comando na VPS:
 
 ```bash
 curl -i http://127.0.0.1:5678/webhook/classificar-mensagem \
@@ -20,64 +18,25 @@ curl -i http://127.0.0.1:5678/webhook/classificar-mensagem \
   --data '{"mensagem":"Podem emitir a segunda via do boleto?"}'
 ```
 
-Confirme `201`, `origem: ollama` e `fila: financeiro`. No editor, selecione a nova execução e use o ID do novo recibo para conferir as telas. A evidência da execução nº 10 permanece registrada no JSON.
+Com o serviço de inferência local ativo, confirme `201`, `origem: ollama` e `fila: financeiro`. Use o ID do comprovante para correlacionar a execução com a consulta à fila. O [índice de capturas](prints/README.md) lista as telas que documentam o fluxo.
 
-## Sincronizar código sem arquivos do ambiente
+## Atualizar uma instalação existente
 
-A publicação usa um pacote de fonte separado do diretório de execução. O ZIP inclui a API, o workflow JSON, o Compose, os testes, o README e as evidências. A lista de exclusão cobre `.env`, bancos locais, chaves, logs, backups, caches e arquivos temporários. O `.env.example` tem apenas parâmetros de exemplo.
+Execute a atualização com o mesmo nome de projeto do Docker Compose usado na implantação atual. Se mover o checkout para outra pasta, confirme o nome em `docker compose ls` e informe-o com `docker compose -p NOME_ATUAL` para reutilizar os volumes existentes da API, do n8n e do Ollama.
 
-Para transferir o snapshot da VPS, rode no PowerShell:
+Reconstrua a imagem da API após atualizar o código. Em uma instalação com o perfil `inferencia` ativo, execute:
 
-```powershell
-$zip = Join-Path $env:USERPROFILE 'Downloads\kodie-classificacao-mensagens.zip'
-scp servidor168:/root/kodie-portfolio/kodie-classificacao-mensagens.zip $zip
-if ($LASTEXITCODE -ne 0) { throw 'Falha ao baixar o pacote da VPS.' }
-$destino = Join-Path $env:USERPROFILE ('Documents\kodie-portfolio-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
-Expand-Archive -LiteralPath $zip -DestinationPath $destino
-Set-Location (Join-Path $destino 'kodie-classificacao-mensagens')
-Get-ChildItem -Force
+```bash
+docker compose --profile inferencia up -d --build --wait
 ```
 
-Para trabalhar na versão publicada, clone o repositório. Assim, o próximo commit mantém o histórico existente.
+Para aplicar o nome **InboxON | Classificação de mensagens** a um fluxo já publicado, renomeie o fluxo existente no editor do n8n. A reimportação do JSON pode criar outro fluxo com o mesmo caminho de webhook.
 
-```powershell
-git clone https://github.com/xmateuschagas/kodie-classificacao-mensagens.git
-Set-Location kodie-classificacao-mensagens
+## Validar após a atualização
+
+```bash
+python3 tests/smoke_n8n.py --modo ollama
+python3 -m unittest discover -s tests -v
 ```
 
-## Publicação no GitHub
-
-### Primeira publicação
-
-Execute a partir do diretório que contém o `README.md`. Se a autenticação estiver expirada, use `gh auth login --hostname github.com --git-protocol https --web` e conclua o login no navegador.
-
-```powershell
-gh auth status
-gh auth setup-git
-git init -b main
-git add -- .dockerignore .env.example .gitignore app docs n8n tests Dockerfile docker-compose.yml requirements.txt README.md
-git diff --cached --check
-git diff --cached --name-only
-```
-
-Confira a lista. O `.env`, o banco SQLite, as credenciais do n8n e arquivos temporários devem ficar fora do commit. Se o repositório ainda não existir, rode:
-
-```powershell
-git commit -m "Publica classificador e roteamento de mensagens"
-gh repo create xmateuschagas/kodie-classificacao-mensagens --public --source=. --remote=origin --push
-gh repo view xmateuschagas/kodie-classificacao-mensagens --json url,visibility,defaultBranchRef
-```
-
-### Acrescentar capturas após a publicação
-
-No checkout do repositório, copie os PNGs para `docs/prints/`, confira o conteúdo das telas e rode:
-
-```powershell
-git add -- 'docs/prints/*.png'
-git diff --cached --check
-git diff --cached --name-only
-git commit -m "Adiciona capturas da execução e configurações do n8n"
-git push origin main
-```
-
-Para repetir a verificação da inferência local na VPS, rode `python3 tests/smoke_n8n.py --modo ollama`. Os testes da API podem ser executados com `python3 -m unittest discover -s tests -v` em um ambiente com as dependências do projeto.
+O primeiro comando verifica o webhook publicado em modo `ollama` e consulta os registros nas filas. O segundo usa um ambiente Python com as dependências do projeto instaladas.
