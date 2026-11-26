@@ -1,10 +1,18 @@
 # InboxON
 
-Projeto pessoal de **classificação e roteamento de mensagens de atendimento**. O InboxON recebe mensagens por webhook, identifica a intenção, atribui uma prioridade e encaminha cada mensagem à fila responsável. Cada gravação gera um comprovante com um identificador que permite consultar o registro.
+## Apresentação da Ideia
 
-Um pedido de segunda via, por exemplo, vai para o financeiro. Uma falha que interrompe vendas vai para a fila prioritária. Quando o motor de classificação está indisponível ou a resposta é inválida, a mensagem segue para triagem manual.
+O InboxON surgiu da rotina de pequenas empresas que recebem dúvidas, reclamações e solicitações no mesmo canal. A proposta é automatizar a primeira triagem e deixar um registro consultável de cada encaminhamento.
 
-## Arquitetura
+## Problema Escolhido
+
+O projeto resolve o caso **4.1 — Classificação de Mensagens** do desafio KODIE. A leitura e a distribuição manuais consomem tempo e podem atrasar pedidos urgentes. Esse caso permite verificar o resultado de ponta a ponta usando a mensagem original, a categoria atribuída e o registro na fila de destino.
+
+## Solução Proposta
+
+O InboxON recebe mensagens por webhook, identifica a intenção, atribui prioridade e encaminha cada mensagem à fila responsável. Cada gravação gera um comprovante cujo ID permite consultar o registro da mensagem. Um pedido de segunda via vai para o financeiro. Uma falha que interrompe vendas vai para a fila prioritária. Quando o motor de classificação está indisponível ou sua resposta é inválida, a mensagem segue para triagem manual.
+
+### Arquitetura
 
 ```mermaid
 flowchart LR
@@ -16,7 +24,7 @@ flowchart LR
 
 A FastAPI valida a entrada e pede ao Ollama uma saída conforme JSON Schema. O Pydantic valida o retorno antes de aceitá-lo. O n8n decide a fila, solicita a gravação à API e devolve o recibo ao cliente. O Ollama roda dentro da rede do Compose, na mesma máquina, e o modo local dispensa chave de API externa.
 
-## Tecnologias
+## Tecnologias Utilizadas
 
 | Camada | Stack |
 | --- | --- |
@@ -26,7 +34,11 @@ A FastAPI valida a entrada e pede ao Ollama uma saída conforme JSON Schema. O P
 | Persistência | SQLite em modo WAL, com chave única por encaminhamento |
 | Infraestrutura e testes | Docker Compose, `unittest` e teste de integração HTTP |
 
-## Contrato HTTP e regras de roteamento
+## Funcionamento do Sistema
+
+O n8n recebe o corpo do webhook e chama a API de classificação. A API valida a mensagem, envia as instruções de classificação e o JSON Schema ao serviço local de inferência e valida a resposta. Com o resultado aceito, o n8n aplica as regras de fila, chama a API de gravação e devolve o comprovante. Quando a entrada é inválida, o fluxo responde `422` sem gravar um encaminhamento.
+
+### Contrato HTTP
 
 | Endpoint | Comportamento |
 | --- | --- |
@@ -49,7 +61,7 @@ A mensagem deve ter de 1 a 3.000 caracteres após a remoção de espaços nas ex
 
 A proteção contra duplicidade vale para a gravação com o mesmo ID. Cada nova chamada ao webhook gera seu próprio ID. No Compose, a API e o editor do n8n escutam somente no loopback do host. O Ollama não publica porta no host. Use mensagens fictícias para demonstração, pois a fila e o histórico do n8n armazenam o texto original.
 
-## Validação na VPS
+### Validação na VPS
 
 Validação de 25/11/2026 em Docker Compose, com o workflow publicado e a API em modo `ollama`.
 
@@ -64,9 +76,41 @@ Validação de 25/11/2026 em Docker Compose, com o workflow publicado e a API em
 
 A bateria levou **71,27 s**. O `docker compose stats` mediu **aproximadamente 3 GiB de RAM somados** logo após o teste: Ollama **2,607 GiB**, n8n **401,8 MiB** e API **38,27 MiB**. Esses valores descrevem a execução observada na VPS.
 
-A [evidência da execução nº 10](docs/prints/execucao-10.json) reúne o pedido de segunda via, a classificação `solicitacao`, a prioridade `media`, a fila `financeiro` e o mesmo ID na gravação e na consulta. O [índice de capturas](docs/prints/README.md) organiza o canvas, a execução bem-sucedida, as configurações dos seis nós e as saídas por etapa.
+A [evidência em JSON da execução nº 10](docs/prints/execucao-10.json) reúne o pedido de segunda via, a classificação `solicitacao`, a prioridade `media`, a fila `financeiro` e o mesmo ID na gravação e na consulta.
 
-## Como executar
+### Documentação visual do fluxo n8n
+
+1. **Fluxo completo.** O editor mostra os seis nós, o caminho que grava o encaminhamento e a saída direta para responder a erros.
+
+   ![Fluxo completo no editor do n8n](docs/prints/01-fluxo-completo.png)
+
+2. **Execução bem-sucedida.** O histórico mostra a execução nº 10 concluída, com o percurso até a resposta do webhook. [Ver a execução nº 10](docs/prints/02-execucao-10-sucesso.png)
+
+3. **Configuração individual dos nós.** As capturas mostram os parâmetros usados para receber, classificar, decidir, encaminhar e responder.
+
+   | Nó | Configuração registrada |
+   | --- | --- |
+   | Receber mensagem | Webhook `POST` e resposta delegada ao último nó. [Ver captura](docs/prints/03-01-webhook.png) |
+   | Classificar na API | Requisição JSON à API e leitura do status HTTP. [Ver captura](docs/prints/03-02-classificar.png) |
+   | Classificação recebida? | Verificação do status `200`, do ID e da classificação. [Ver captura](docs/prints/03-03-condicao.png) |
+   | Definir fila | Seleção da fila por origem, prioridade, categoria e setor. [Ver captura](docs/prints/03-04-definir-fila.png) |
+   | Registrar encaminhamento | Requisição `POST` para gravar o encaminhamento. [Ver captura](docs/prints/03-05-registrar.png) |
+   | Responder webhook | Expressões que montam o corpo e o código HTTP. [Ver captura](docs/prints/03-06-responder.png) |
+
+4. **Resultados por etapa.** A trilha da execução nº 10 acompanha a mensagem do boleto até a consulta ao registro persistido.
+
+   | Etapa | Resultado registrado |
+   | --- | --- |
+   | Entrada | Mensagem recebida no webhook. [Ver captura](docs/prints/04-01-entrada.png) |
+   | Classificação | HTTP `200`, `origem: ollama` e dados da classificação. [Ver captura](docs/prints/04-02-classificacao.png) |
+   | Roteamento | Fila `financeiro` escolhida para o pedido. [Ver captura](docs/prints/04-03-fila.png) |
+   | Gravação | HTTP `201`, ID do comprovante e data do registro. [Ver captura](docs/prints/04-04-gravacao.png) |
+   | Resposta | Saída do nó de resposta com HTTP `201`. [Ver captura](docs/prints/04-05-resposta.png) |
+   | Consulta | Mensagem original e mesmo ID na fila `financeiro`. [Ver captura](docs/prints/04-06-consulta.png) |
+
+O [guia de evidências](docs/prints/README.md) detalha os campos de cada captura e como consultar o registro original.
+
+## Como Executar
 
 ### Docker Compose
 
@@ -106,11 +150,21 @@ python3 tests/smoke_n8n.py --modo ollama
 
 O webhook deve devolver HTTP `201`, `origem: ollama` e `fila: financeiro`. Confirme o ID do comprovante na consulta à fila. Para testar com regras locais, execute `python3 tests/smoke_n8n.py` com a API em `demo`. O contrato HTTP pode ser consultado em `http://127.0.0.1:8000/docs`.
 
-Para rodar os testes unitários com Python 3.12 em um ambiente virtual:
+### API local sem Docker
+
+Na raiz do projeto, instale as dependências em um ambiente virtual com Python 3.12. O comando abaixo inicia a API em modo `demo`, usando SQLite local.
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Abra `http://127.0.0.1:8000/docs` para exercitar a API. O Docker Compose prepara a rede para o workflow exportado, que chama a API pelo endereço `http://api:8000`.
+
+Para rodar os testes unitários, use o mesmo ambiente virtual.
+
+```bash
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
